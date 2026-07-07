@@ -24,7 +24,7 @@ public class AlertasService implements IAlertasService {
     private final List<String> destinatarios;
 
     public AlertasService(
-            IClimaRepository climaRepository, 
+            IClimaRepository climaRepository,
             EmailService emailService,
             @Value("${email.alertas.remitente}") String remitente,
             @Value("${email.alertas.destinatarios}") String destinatarios) {
@@ -39,32 +39,27 @@ public class AlertasService implements IAlertasService {
         return Mono.fromCallable(() -> climaRepository.findByProcesado(false))
             .flatMap(climas -> {
                 logger.info("Procesando {} registros de clima no procesados", climas.size());
-                return Mono.just(climas);
-            })
-            .flatMap(climas -> {
+
                 climas.stream()
                     .filter(this::cumpleCondicionesAlerta)
                     .forEach(this::generarYEnviarEmail);
-                
-                // Marcar todos como procesados
+
                 climas.forEach(clima -> {
                     clima.setProcesado(true);
                     climaRepository.save(clima);
                 });
-                
-                return Mono.empty();
+
+                return Mono.<Void>empty();
             })
             .onErrorResume(e -> {
                 logger.error("Error al procesar alertas: {}", e.getMessage());
                 return Mono.empty();
-            })
-            .then();
+            });
     }
 
     private boolean cumpleCondicionesAlerta(Clima clima) {
-        //TODO: podríamos refactorizar el diseño para que no sea un simple método, pues puede ser más complejo
-        return clima.getTemperaturaCelsius() > TEMPERATURA_ALERTA && 
-               clima.getHumedad() > HUMEDAD_ALERTA;
+        return clima.getTemperaturaCelsius() != null && clima.getTemperaturaCelsius() > TEMPERATURA_ALERTA &&
+               clima.getHumedad() != null && clima.getHumedad() > HUMEDAD_ALERTA;
     }
 
     private void generarYEnviarEmail(Clima clima) {
@@ -85,10 +80,9 @@ public class AlertasService implements IAlertasService {
 
         for (String destinatario : destinatarios) {
             Email email = new Email(destinatario, remitente, asunto, mensaje);
-            emailService.crearEmail(email);
+            emailService.enviarEmail(email);
         }
-        
-        logger.info("Email de alerta generado para {} - Enviado a {} destinatarios", 
-            clima.getCiudad(), destinatarios.size());
+
+        logger.info("Alerta enviada para {} a {} destinatarios", clima.getCiudad(), destinatarios.size());
     }
-} 
+}

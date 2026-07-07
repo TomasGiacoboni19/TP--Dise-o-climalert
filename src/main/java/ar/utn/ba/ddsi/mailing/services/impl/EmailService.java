@@ -5,6 +5,9 @@ import ar.utn.ba.ddsi.mailing.models.repositories.IEmailRepository;
 import ar.utn.ba.ddsi.mailing.services.IEmailService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.mail.MailException;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import java.util.List;
 
@@ -12,13 +15,29 @@ import java.util.List;
 public class EmailService implements IEmailService {
     private static final Logger logger = LoggerFactory.getLogger(EmailService.class);
     private final IEmailRepository emailRepository;
+    private final JavaMailSender mailSender;
 
-    public EmailService(IEmailRepository emailRepository) {
+    public EmailService(IEmailRepository emailRepository, JavaMailSender mailSender) {
         this.emailRepository = emailRepository;
+        this.mailSender = mailSender;
     }
 
     @Override
-    public Email crearEmail(Email email) {
+    public Email enviarEmail(Email email) {
+        try {
+            SimpleMailMessage mensaje = new SimpleMailMessage();
+            mensaje.setFrom(email.getRemitente());
+            mensaje.setTo(email.getDestinatario());
+            mensaje.setSubject(email.getAsunto());
+            mensaje.setText(email.getContenido());
+
+            mailSender.send(mensaje);
+            email.setEnviado(true);
+            logger.info("Email enviado a {}", email.getDestinatario());
+        } catch (MailException e) {
+            email.setEnviado(false);
+            logger.error("Error al enviar email a {}: {}", email.getDestinatario(), e.getMessage());
+        }
         return emailRepository.save(email);
     }
 
@@ -29,26 +48,4 @@ public class EmailService implements IEmailService {
         }
         return emailRepository.findAll();
     }
-
-    @Override
-    public void procesarPendientes() {
-        List<Email> pendientes = emailRepository.findByEnviado(false);
-        for (Email email : pendientes) {
-            email.enviar();
-            email.setEnviado(true);
-            emailRepository.save(email);
-        }
-    }
-
-    @Override
-    public void loguearEmailsPendientes() {
-        List<Email> pendientes = obtenerEmails(true);
-        logger.info("Emails pendientes de envío: {}", pendientes.size());
-        pendientes.forEach(email -> 
-            logger.info("Email pendiente - ID: {}, Destinatario: {}, Asunto: {}", 
-                email.getId(),
-                email.getDestinatario(), 
-                email.getAsunto())
-        );
-    }
-} 
+}

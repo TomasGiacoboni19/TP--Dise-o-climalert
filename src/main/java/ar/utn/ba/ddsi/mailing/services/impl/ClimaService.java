@@ -9,27 +9,25 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Service
 public class ClimaService implements IClimaService {
     private static final Logger logger = LoggerFactory.getLogger(ClimaService.class);
-    private static final String[] CIUDADES_ARGENTINA = {
-        "Buenos Aires", "Cordoba", "Rosario", "Mendoza", "Tucuman",
-        "La Plata", "Mar del Plata", "Salta", "Santa Fe", "San Juan"
-    };
 
     private final IClimaRepository climaRepository;
     private final WebClient webClient;
     private final String apiKey;
+    private final String ubicacion;
 
     public ClimaService(
             IClimaRepository climaRepository,
             @Value("${weather.api.key}") String apiKey,
-            @Value("${weather.api.base-url}") String baseUrl) {
+            @Value("${weather.api.base-url}") String baseUrl,
+            @Value("${weather.api.ubicacion}") String ubicacion) {
         this.climaRepository = climaRepository;
         this.apiKey = apiKey;
+        this.ubicacion = ubicacion;
         this.webClient = WebClient.builder()
             .baseUrl(baseUrl)
             .build();
@@ -37,18 +35,16 @@ public class ClimaService implements IClimaService {
 
     @Override
     public Mono<Void> actualizarClimaCiudades() {
-        return Flux.fromArray(CIUDADES_ARGENTINA)
-            .flatMap(this::obtenerClimaDeAPI)
+        return obtenerClimaDeAPI(ubicacion)
             .flatMap(clima -> {
                 climaRepository.save(clima);
                 logger.info("Clima actualizado para: {}", clima.getCiudad());
-                return Mono.empty();
+                return Mono.<Void>empty();
             })
             .onErrorResume(e -> {
                 logger.error("Error al actualizar el clima: {}", e.getMessage());
                 return Mono.empty();
-            })
-            .then();
+            });
     }
 
     private Mono<Clima> obtenerClimaDeAPI(String ciudad) {
@@ -74,4 +70,4 @@ public class ClimaService implements IClimaService {
                 return clima;
             });
     }
-} 
+}
